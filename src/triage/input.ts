@@ -1,14 +1,24 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
+export const TITLE_LIMITS = { min: 5, max: 120 } as const;
+export const DESCRIPTION_LIMITS = { min: 20, max: 2000 } as const;
+
 /** What a user submits. Validated before anything reaches the model. */
 export const FeatureRequestInputSchema = z.object({
-  title: z.string().trim().min(5, "Title must be at least 5 characters.").max(120),
+  title: z
+    .string()
+    .trim()
+    .min(TITLE_LIMITS.min, `Title must be at least ${TITLE_LIMITS.min} characters.`)
+    .max(TITLE_LIMITS.max),
   description: z
     .string()
     .trim()
-    .min(20, "Please describe the request in at least 20 characters.")
-    .max(2000),
+    .min(
+      DESCRIPTION_LIMITS.min,
+      `Please describe the request in at least ${DESCRIPTION_LIMITS.min} characters.`,
+    )
+    .max(DESCRIPTION_LIMITS.max),
 });
 
 export type FeatureRequestInput = z.infer<typeof FeatureRequestInputSchema>;
