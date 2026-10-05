@@ -2,3 +2,7 @@
 Prompt: Create a CLAUDE.md file in the project root with a "Project Rules" section requiring every prompt to be logged to prompts.txt with an ISO 8601 timestamp and a brief summary of the response.
 Response: Created CLAUDE.md with the Prompt Logging rule and created prompts.txt with this first entry.
 
+[2026-10-05T21:23:58Z]
+Prompt: Analyze the Feature Intelligence technical assessment (submit/browse/support feature requests; AI triage: problem extraction, theming, semantic duplicate detection with reasoning, transparent priority rubric; no auto-merge, human decides). Propose a scoped 2-3h MVP architecture (Next.js + TS + SQLite) covering workflow, modules, data model, AI contract, rubric, fallbacks, tests, non-goals and Loom tradeoffs. No code or scaffolding.
+Response: Wrote an architecture proposal in chat: two-phase analyze-then-decide submission flow, CandidateRetriever + TriageModel seams (all-requests now, vector retrieval later), Zod-validated AI contract with referential checks, LLM-scored dimensions with a deterministic priority formula, triage_runs/decisions audit tables, fail-open-without-enrichment fallback, focused Vitest strategy, explicit non-goals and tradeoffs. No project files changed apart from this log.
+
