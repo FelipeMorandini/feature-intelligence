@@ -1,0 +1,446 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "982b465d-1a38-482f-b07e-9bb20ebc2b3f",
+  "prevId": "0a9f9f80-7a69-4a41-b396-06794562bc5d",
+  "tables": {
+    "feature_requests": {
+      "name": "feature_requests",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "triage_status": {
+          "name": "triage_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "triage_run_id": {
+          "name": "triage_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "problem_statement": {
+          "name": "problem_statement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "theme": {
+          "name": "theme",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "enrichment": {
+          "name": "enrichment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "feature_requests_theme_idx": {
+          "name": "feature_requests_theme_idx",
+          "columns": [
+            "theme"
+          ],
+          "isUnique": false
+        },
+        "feature_requests_triage_run_unique": {
+          "name": "feature_requests_triage_run_unique",
+          "columns": [
+            "triage_run_id"
+          ],
+          "isUnique": true
+        },
+        "feature_requests_created_at_idx": {
+          "name": "feature_requests_created_at_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "feature_requests_triage_run_id_triage_runs_id_fk": {
+          "name": "feature_requests_triage_run_id_triage_runs_id_fk",
+          "tableFrom": "feature_requests",
+          "tableTo": "triage_runs",
+          "columnsFrom": [
+            "triage_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "feature_requests_triage_status_check": {
+          "name": "feature_requests_triage_status_check",
+          "value": "\"feature_requests\".\"triage_status\" in ('complete', 'failed')"
+        },
+        "feature_requests_theme_check": {
+          "name": "feature_requests_theme_check",
+          "value": "\"feature_requests\".\"theme\" is null or \"feature_requests\".\"theme\" in ('notifications', 'reporting', 'automation', 'integrations', 'planning', 'collaboration', 'permissions', 'experience', 'other')"
+        },
+        "feature_requests_enrichment_check": {
+          "name": "feature_requests_enrichment_check",
+          "value": "(\"feature_requests\".\"triage_status\" = 'complete'\n            and \"feature_requests\".\"problem_statement\" is not null\n            and \"feature_requests\".\"theme\" is not null\n            and \"feature_requests\".\"enrichment\" is not null)\n          or (\"feature_requests\".\"triage_status\" = 'failed'\n            and \"feature_requests\".\"problem_statement\" is null\n            and \"feature_requests\".\"theme\" is null\n            and \"feature_requests\".\"enrichment\" is null)"
+        }
+      }
+    },
+    "supports": {
+      "name": "supports",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "voter_id": {
+          "name": "voter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "supports_request_voter_unique": {
+          "name": "supports_request_voter_unique",
+          "columns": [
+            "request_id",
+            "voter_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "supports_request_id_feature_requests_id_fk": {
+          "name": "supports_request_id_feature_requests_id_fk",
+          "tableFrom": "supports",
+          "tableTo": "feature_requests",
+          "columnsFrom": [
+            "request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "supports_source_check": {
+          "name": "supports_source_check",
+          "value": "\"supports\".\"source\" in ('direct', 'duplicate_redirect')"
+        }
+      }
+    },
+    "triage_decisions": {
+      "name": "triage_decisions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "triage_run_id": {
+          "name": "triage_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "suggested_request_id": {
+          "name": "suggested_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ai_confidence": {
+          "name": "ai_confidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resulting_request_id": {
+          "name": "resulting_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "triage_decisions_run_unique": {
+          "name": "triage_decisions_run_unique",
+          "columns": [
+            "triage_run_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "triage_decisions_triage_run_id_triage_runs_id_fk": {
+          "name": "triage_decisions_triage_run_id_triage_runs_id_fk",
+          "tableFrom": "triage_decisions",
+          "tableTo": "triage_runs",
+          "columnsFrom": [
+            "triage_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "triage_decisions_suggested_request_id_feature_requests_id_fk": {
+          "name": "triage_decisions_suggested_request_id_feature_requests_id_fk",
+          "tableFrom": "triage_decisions",
+          "tableTo": "feature_requests",
+          "columnsFrom": [
+            "suggested_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "triage_decisions_resulting_request_id_feature_requests_id_fk": {
+          "name": "triage_decisions_resulting_request_id_feature_requests_id_fk",
+          "tableFrom": "triage_decisions",
+          "tableTo": "feature_requests",
+          "columnsFrom": [
+            "resulting_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "triage_decisions_decision_check": {
+          "name": "triage_decisions_decision_check",
+          "value": "\"triage_decisions\".\"decision\" in ('supported_existing', 'created_new')"
+        },
+        "triage_decisions_confidence_check": {
+          "name": "triage_decisions_confidence_check",
+          "value": "\"triage_decisions\".\"ai_confidence\" in ('high', 'medium', 'low')"
+        }
+      }
+    },
+    "triage_runs": {
+      "name": "triage_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "input_title": {
+          "name": "input_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "input_description": {
+          "name": "input_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "input_hash": {
+          "name": "input_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "candidate_ids": {
+          "name": "candidate_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "raw_output": {
+          "name": "raw_output",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "validated_output": {
+          "name": "validated_output",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "latency_ms": {
+          "name": "latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "triage_runs_status_check": {
+          "name": "triage_runs_status_check",
+          "value": "\"triage_runs\".\"status\" in ('succeeded', 'invalid_output', 'provider_error', 'unavailable')"
+        },
+        "triage_runs_validated_output_check": {
+          "name": "triage_runs_validated_output_check",
+          "value": "(\"triage_runs\".\"status\" = 'succeeded') = (\"triage_runs\".\"validated_output\" is not null)"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

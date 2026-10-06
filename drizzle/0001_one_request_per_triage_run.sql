@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `feature_requests_triage_run_unique` ON `feature_requests` (`triage_run_id`);

@@ -15,7 +15,7 @@ export function PriorityBadge({
   priority,
   showScore = true,
 }: {
-  priority: PriorityAssessment | null;
+  priority: Pick<PriorityAssessment, "score" | "band"> | null;
   showScore?: boolean;
 }) {
   if (!priority) {

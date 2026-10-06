@@ -10,7 +10,12 @@ import { SupportButton } from "@/components/support-button";
 import { getDb } from "@/db";
 import { formatDate, formatDateTime, pluralize } from "@/lib/format";
 import { readVoterId } from "@/lib/voter";
-import { getRequestDetail, type RequestDetail } from "@/requests/queries";
+import {
+  getRequestDetail,
+  listConsolidatedSubmissions,
+  type ConsolidatedSubmission,
+  type RequestDetail,
+} from "@/requests/queries";
 
 export async function generateMetadata({ params }: PageProps<"/requests/[id]">): Promise<Metadata> {
   await connection();
@@ -18,13 +23,16 @@ export async function generateMetadata({ params }: PageProps<"/requests/[id]">):
   return { title: request?.title ?? "Request not found" };
 }
 
-export default async function RequestDetailPage({ params }: PageProps<"/requests/[id]">) {
+export default async function RequestDetailPage({ params, searchParams }: PageProps<"/requests/[id]">) {
   // Request-time rendering: support counts and priority change after build.
   await connection();
 
   const { id } = await params;
-  const request = getRequestDetail(getDb(), id, await readVoterId());
+  const db = getDb();
+  const request = getRequestDetail(db, id, await readVoterId());
   if (!request) notFound();
+  const consolidated = listConsolidatedSubmissions(db, id);
+  const created = (await searchParams).created;
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,6 +43,15 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
         <ArrowLeftIcon className="size-4" />
         Back to backlog
       </Link>
+
+      {(created === "triaged" || created === "untriaged") && (
+        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span className="font-semibold">Request created.</span>{" "}
+          {created === "triaged"
+            ? "It now appears in the backlog with the validated AI triage below."
+            : "AI triage was unavailable, so it was saved without enrichment and is marked as not triaged."}
+        </div>
+      )}
 
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -65,6 +82,8 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
           </Section>
 
           <AiTriageSection request={request} />
+
+          {consolidated.length > 0 && <ConsolidatedSubmissions submissions={consolidated} />}
         </div>
 
         <aside className="flex flex-col gap-6">
@@ -97,6 +116,27 @@ function Section({
       </div>
       {children}
     </section>
+  );
+}
+
+function ConsolidatedSubmissions({ submissions }: { submissions: ConsolidatedSubmission[] }) {
+  return (
+    <Section title="Consolidated submissions" eyebrow="Supporters' own words">
+      <p className="-mt-2 mb-4 text-sm text-neutral-600">
+        People who submitted a probable duplicate and chose to support this request instead. Their wording is kept so
+        nothing they said is lost.
+      </p>
+      <ul className="flex flex-col gap-3">
+        {submissions.map((submission, index) => (
+          <li key={index} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+            <p className="text-sm whitespace-pre-wrap text-neutral-800">{submission.wording}</p>
+            <p className="mt-2 text-xs text-neutral-500">
+              <time dateTime={submission.submittedAt.toISOString()}>{formatDate(submission.submittedAt)}</time>
+            </p>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 

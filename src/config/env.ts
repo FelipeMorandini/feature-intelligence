@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Bounded classification and duplicate reasoning in an interactive flow:
+// Sonnet gives the better latency/cost tradeoff. Override with ANTHROPIC_MODEL.
+export const DEFAULT_TRIAGE_MODEL = "claude-sonnet-5-5";
+
 /**
  * Server-side configuration. Secrets come only from the environment
  * (.env.local in development) and are never committed.
@@ -13,8 +17,15 @@ const ServerEnvSchema = z.object({
     .trim()
     .optional()
     .transform((value) => (value ? value : undefined)),
-  ANTHROPIC_MODEL: z.string().trim().min(1).default("claude-sonnet-5-5"),
-  TRIAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  ANTHROPIC_MODEL: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || DEFAULT_TRIAGE_MODEL),
+  TRIAGE_TIMEOUT_MS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.coerce.number().int().positive().default(45_000),
+  ),
 });
 
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;

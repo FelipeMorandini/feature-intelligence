@@ -1,4 +1,4 @@
-import { and, count, eq, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "@/db/client";
 import { featureRequests, supports, triageRuns } from "@/db/schema";
@@ -178,6 +178,36 @@ export function getRequestDetail(db: AppDatabase, id: string, voterId: string | 
           }
         : null,
   };
+}
+
+/** Backlog items for specific requests, e.g. the matches proposed by triage. */
+export function getBacklogItemsByIds(
+  db: AppDatabase,
+  ids: string[],
+  voterId: string | null,
+): Map<string, BacklogItem> {
+  if (ids.length === 0) return new Map();
+  const items = selectRequests(db, voterId, inArray(featureRequests.id, ids)).all().map(toBacklogItem);
+  return new Map(items.map((item) => [item.id, item]));
+}
+
+export interface ConsolidatedSubmission {
+  wording: string;
+  submittedAt: Date;
+}
+
+/**
+ * Original wording kept when someone chose to support this request instead of
+ * creating a probable duplicate.
+ */
+export function listConsolidatedSubmissions(db: AppDatabase, requestId: string): ConsolidatedSubmission[] {
+  return db
+    .select({ wording: supports.comment, submittedAt: supports.createdAt })
+    .from(supports)
+    .where(and(eq(supports.requestId, requestId), isNotNull(supports.comment)))
+    .orderBy(desc(supports.createdAt))
+    .all()
+    .map((row) => ({ wording: row.wording ?? "", submittedAt: row.submittedAt }));
 }
 
 export function countRequests(db: AppDatabase): number {

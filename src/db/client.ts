@@ -1,8 +1,9 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
+import Database, { type RunResult } from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import * as schema from "./schema";
 
 /**
@@ -14,6 +15,9 @@ import * as schema from "./schema";
  */
 
 export type AppDatabase = BetterSQLite3Database<typeof schema>;
+
+/** The database or an open transaction — for helpers that run inside either. */
+export type DbExecutor = BaseSQLiteDatabase<"sync", RunResult, typeof schema>;
 
 export const MIGRATIONS_FOLDER = path.join(process.cwd(), "drizzle");
 

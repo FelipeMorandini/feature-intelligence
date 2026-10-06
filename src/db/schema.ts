@@ -87,6 +87,8 @@ export const featureRequests = sqliteTable(
   },
   (table) => [
     index("feature_requests_theme_idx").on(table.theme),
+    // One analysis can produce at most one request (NULLs are not compared).
+    uniqueIndex("feature_requests_triage_run_unique").on(table.triageRunId),
     index("feature_requests_created_at_idx").on(table.createdAt),
     check("feature_requests_triage_status_check", oneOf(table.triageStatus, TRIAGE_STATUSES)),
     check("feature_requests_theme_check", sql`${table.theme} is null or ${oneOf(table.theme, THEME_IDS)}`),

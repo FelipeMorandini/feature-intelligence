@@ -22,16 +22,25 @@ export interface TriageModel {
   generate(request: TriageModelRequest): Promise<unknown>;
 }
 
-export type TriageModelErrorKind = "timeout" | "provider_error";
+/**
+ * - timeout / provider_error: the call failed (including refusals); no output.
+ * - incomplete_output: the model stopped before finishing (e.g. max_tokens).
+ *   Whatever it produced must not be trusted, even if it happens to parse.
+ */
+export type TriageModelErrorKind = "timeout" | "provider_error" | "incomplete_output";
 
 /** A failed model call. Callers map this to an honest unavailable state. */
 export class TriageModelError extends Error {
+  /** Partial output kept for the audit trail only (incomplete_output). */
+  readonly partialOutput?: unknown;
+
   constructor(
     readonly kind: TriageModelErrorKind,
     message: string,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; partialOutput?: unknown },
   ) {
     super(message, options);
     this.name = "TriageModelError";
+    this.partialOutput = options?.partialOutput;
   }
 }

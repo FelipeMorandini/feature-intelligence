@@ -24,15 +24,11 @@ export default function NewRequestPage() {
       </Link>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-6 lg:col-span-2">
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Submit a feature request</h1>
-          <p className="mt-1 mb-6 text-sm text-neutral-600">
-            Tell us what you need. Before anything is saved, triage checks whether someone has already asked for it.
-          </p>
+        <div className="lg:col-span-2">
           <NewRequestForm titleLimits={TITLE_LIMITS} descriptionLimits={DESCRIPTION_LIMITS} />
-        </section>
+        </div>
 
-        <aside className="rounded-xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-6">
+        <aside className="h-fit rounded-xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-6">
           <h2 className="text-sm font-semibold text-neutral-900">What happens when you analyze</h2>
           <ol className="mt-3 flex flex-col gap-3">
             {STEPS.map((step, index) => (
@@ -45,7 +41,7 @@ export default function NewRequestPage() {
             ))}
           </ol>
           <p className="mt-4 text-xs text-neutral-500">
-            Nothing is merged automatically.{" "}
+            Nothing is merged automatically. If AI triage is unavailable, you can still submit your request untriaged.{" "}
             <Link href="/how-it-works" className="font-medium text-indigo-700 hover:underline">
               How triage works
             </Link>
