@@ -28,7 +28,7 @@ const UNAVAILABLE_COPY: Record<TriageUnavailableReason, string> = {
 
 const CONFIDENCE_LABEL = { high: "High confidence", medium: "Medium confidence", low: "Low confidence" } as const;
 
-/** The human review step: shows the validated recommendation and offers the decisions. */
+/** The human review step: shows the format-checked recommendation and offers the decisions. */
 export function TriageReview({ result, pending, error, onCreate, onSupport }: TriageReviewProps) {
   if (result.status === "unavailable") {
     return (
@@ -69,9 +69,12 @@ export function TriageReview({ result, pending, error, onCreate, onSupport }: Tr
           </div>
           <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 ring-1 ring-violet-600/20 ring-inset">
             <SparkIcon className="size-3.5" />
-            AI-generated · validated
+            AI-generated · format checked
           </span>
         </div>
+        <p className="mt-2 text-xs text-neutral-500">
+          The app checked the response structure and request references. The recommendation itself is AI judgment.
+        </p>
 
         <dl className="mt-5 flex flex-col gap-5">
           <div>
@@ -93,7 +96,8 @@ export function TriageReview({ result, pending, error, onCreate, onSupport }: Tr
             <dd className="mt-3">
               <PriorityBreakdown priority={analysis.priority} rubric={analysis.rubric} />
               <p className="mt-2 text-xs text-neutral-500">
-                A new request starts with no supports, so observed demand contributes 0 points until people support it.
+                You count as the first supporter of a new request, so observed demand starts at one support and grows as
+                others support it.
               </p>
             </dd>
           </div>

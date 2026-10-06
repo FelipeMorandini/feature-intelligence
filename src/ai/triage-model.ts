@@ -24,7 +24,7 @@ export interface TriageModel {
 
 /**
  * - timeout / provider_error: the call failed (including refusals); no output.
- * - incomplete_output: the model stopped before finishing (e.g. max_tokens).
+ * - incomplete_output: the model did not stop normally (e.g. max_tokens).
  *   Whatever it produced must not be trusted, even if it happens to parse.
  */
 export type TriageModelErrorKind = "timeout" | "provider_error" | "incomplete_output";

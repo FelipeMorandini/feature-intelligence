@@ -11,7 +11,7 @@ import type { FeatureRequestInput } from "./input";
  * output contract below change, so stored results can be traced to the exact
  * prompt that produced them.
  */
-export const TRIAGE_PROMPT_VERSION = "triage-v1";
+export const TRIAGE_PROMPT_VERSION = "triage-v2";
 
 const MODEL_SCORED: ModelScoredDimension[] = ["severity", "strategicAlignment", "workaroundGap"];
 
@@ -29,7 +29,7 @@ Your role is to interpret a newly submitted request and recommend how it should 
 ## What to return
 1. problemStatement: the underlying customer problem or need in one or two neutral sentences. Describe the need, not the proposed solution.
 2. theme: exactly one theme id from the taxonomy below, with a one-sentence themeRationale.
-3. matches: existing requests, taken only from <existing_requests>, that express the same or an overlapping need. At most ${MAX_MATCHES}, strongest first. Return an empty array when nothing is meaningfully related.
+3. matches: existing requests, taken only from <existing_requests>, that are either duplicates or related requests as defined below. At most ${MAX_MATCHES}, strongest first. Return an empty array when no existing request qualifies.
 4. rubric: three scores from 1 to 5, each with a one- or two-sentence rationale grounded in the request text.
 
 ## Themes
@@ -40,12 +40,18 @@ ${PRODUCT_STRATEGY.goals.map((goal) => `- ${goal.id}: ${goal.title} ${goal.descr
 
 ## Rubric
 ${rubricSection()}
-For strategicAlignment, judge only against the goals listed above and set goalIds to the goals the request would advance (an empty array if none).
+For strategicAlignment, judge only against the goals listed above and use this scale:
+- 1: does not advance any goal. goalIds must be empty.
+- 2: at most a weak or indirect contribution to one goal. goalIds lists that goal, or is empty.
+- 3: clearly advances at least one goal, but only in part.
+- 4: directly advances at least one goal.
+- 5: directly and substantially advances at least one goal.
+For scores 3 to 5, goalIds must list every goal the request advances.
 Do not estimate how many customers want this. Demand is measured separately from real supports.
 
 ## Duplicates and related requests
-- duplicate: implementing one request would substantially satisfy the underlying need expressed by the other. Different wording, a different proposed implementation or a different surface (for example Slack versus another chat tool, or email versus in-app) does not on its own make them different requests.
-- related: the requests address the same general area or theme but need meaningfully different product outcomes, so implementing one would leave the other's need unmet.
+- duplicate: implementing one request would substantially satisfy the underlying need expressed by the other. Different wording, a different proposed implementation, or a different channel or interface for meeting the same need does not on its own make them different requests.
+- related: the requests share an area or overlapping context but need meaningfully different product outcomes, so implementing one would leave the other's need unmet.
 Compare underlying needs, not keywords. Requests that share words can still be different; requests with no words in common can still be duplicates.
 
 For each match set confidence to:

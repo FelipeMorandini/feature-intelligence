@@ -38,12 +38,29 @@ export const TriageMatchSchema = z.object({
 
 export type TriageMatch = z.infer<typeof TriageMatchSchema>;
 
+/**
+ * The alignment score must agree with the goals it cites:
+ * 1 → no goals; 2 → at most one goal; 3–5 → at least one goal.
+ */
+const StrategicAlignmentSchema = RubricScoreSchema.extend({
+  /** Which explicit strategy goals the request advances. */
+  goalIds: z.array(z.enum(STRATEGY_GOAL_IDS)).max(STRATEGY_GOAL_IDS.length),
+}).superRefine(({ score, goalIds }, ctx) => {
+  const goalCount = new Set(goalIds).size;
+  const message =
+    score === 1 && goalCount > 0
+      ? "a strategicAlignment score of 1 means no goal is advanced, so goalIds must be empty"
+      : score === 2 && goalCount > 1
+        ? "a strategicAlignment score of 2 allows at most one goal id"
+        : score >= 3 && goalCount === 0
+          ? `a strategicAlignment score of ${score} must cite at least one goal id`
+          : null;
+  if (message) ctx.addIssue({ code: "custom", path: ["goalIds"], message });
+});
+
 export const TriageRubricSchema = z.object({
   severity: RubricScoreSchema,
-  strategicAlignment: RubricScoreSchema.extend({
-    /** Which explicit strategy goals the request advances (may be empty). */
-    goalIds: z.array(z.enum(STRATEGY_GOAL_IDS)).max(STRATEGY_GOAL_IDS.length),
-  }),
+  strategicAlignment: StrategicAlignmentSchema,
   workaroundGap: RubricScoreSchema,
 });
 
@@ -99,7 +116,9 @@ function compareMatches(a: TriageMatch, b: TriageMatch): number {
  * Schema-validates raw model output, then applies referential checks:
  * - matches must reference a request that was actually offered as a candidate
  *   (hallucinated ids are dropped, not trusted);
- * - each request is matched at most once (first occurrence wins);
+ * - each request is matched at most once, keeping its strongest
+ *   interpretation, so an earlier "related" entry can never hide a
+ *   duplicate that needs human review;
  * - at most MAX_MATCHES are kept, strongest first.
  *
  * Structural failures reject the whole output; we never persist partial
@@ -118,9 +137,10 @@ export function validateTriageOutput(
   const seen = new Set<string>();
   const matches: TriageMatch[] = [];
 
-  for (const match of parsed.data.matches) {
+  // Rank before de-duplicating (sort is stable, so ties keep model order).
+  for (const match of [...parsed.data.matches].sort(compareMatches)) {
     if (!candidateIds.has(match.requestId)) {
-      droppedMatchIds.push(match.requestId);
+      if (!droppedMatchIds.includes(match.requestId)) droppedMatchIds.push(match.requestId);
       continue;
     }
     if (seen.has(match.requestId)) continue;
@@ -137,7 +157,7 @@ export function validateTriageOutput(
         goalIds: [...new Set(parsed.data.rubric.strategicAlignment.goalIds)],
       },
     },
-    matches: matches.sort(compareMatches).slice(0, MAX_MATCHES),
+    matches: matches.slice(0, MAX_MATCHES),
   };
 
   return { ok: true, output, droppedMatchIds };

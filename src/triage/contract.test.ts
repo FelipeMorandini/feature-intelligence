@@ -61,7 +61,7 @@ describe("validateTriageOutput", () => {
     expect(result.droppedMatchIds).toEqual(["req-invented"]);
   });
 
-  it("keeps one match per request and at most MAX_MATCHES, strongest first", () => {
+  it("keeps the strongest match per request and at most MAX_MATCHES, strongest first", () => {
     const raw = validOutput({
       matches: [
         match({ requestId: "req-a", relationship: "related", confidence: "high" }),
@@ -78,10 +78,26 @@ describe("validateTriageOutput", () => {
     if (!result.ok) return;
     expect(result.output.matches).toHaveLength(MAX_MATCHES);
     expect(result.output.matches.map((m) => [m.requestId, m.relationship, m.confidence])).toEqual([
+      ["req-a", "duplicate", "high"],
       ["req-c", "duplicate", "medium"],
       ["req-b", "duplicate", "low"],
-      ["req-a", "related", "high"],
     ]);
+  });
+
+  it("never lets an earlier related entry hide a duplicate of the same request", () => {
+    const result = validateTriageOutput(
+      validOutput({
+        matches: [
+          match({ requestId: "req-a", relationship: "related", confidence: "high" }),
+          match({ requestId: "req-a", relationship: "duplicate", confidence: "medium" }),
+        ],
+      }),
+      candidateIds,
+    );
+    if (!result.ok) throw new Error(result.message);
+
+    expect(result.output.matches).toEqual([expect.objectContaining({ requestId: "req-a", relationship: "duplicate" })]);
+    expect(getProbableDuplicates(result.output).map((m) => m.requestId)).toEqual(["req-a"]);
   });
 
   it.each([
@@ -127,6 +143,36 @@ describe("validateTriageOutput", () => {
     if (!result.ok) return;
     expect(result.output).not.toHaveProperty("priorityScore");
     expect(result.output).not.toHaveProperty("band");
+  });
+});
+
+describe("strategic alignment consistency", () => {
+  const withAlignment = (score: number, goalIds: string[]) =>
+    validOutput({
+      rubric: { ...validOutput().rubric, strategicAlignment: { score, rationale: "Fits the strategy.", goalIds } },
+    });
+  const ONE_GOAL = ["reduce-coordination-work"];
+  const TWO_GOALS = ["reduce-coordination-work", "cross-team-visibility"];
+
+  it.each([
+    [1, [], true],
+    [1, ONE_GOAL, false],
+    [2, [], true],
+    [2, ONE_GOAL, true],
+    [2, TWO_GOALS, false],
+    [3, [], false],
+    [3, ONE_GOAL, true],
+    [5, [], false],
+    [5, TWO_GOALS, true],
+  ])("score %i with %j goal ids is valid: %s", (score, goalIds, valid) => {
+    const result = validateTriageOutput(withAlignment(score, goalIds), candidateIds);
+
+    expect(result.ok).toBe(valid);
+    if (!result.ok) expect(result.message).toContain("goalIds");
+  });
+
+  it("counts repeated goal ids once", () => {
+    expect(validateTriageOutput(withAlignment(2, [...ONE_GOAL, ...ONE_GOAL]), candidateIds).ok).toBe(true);
   });
 });
 

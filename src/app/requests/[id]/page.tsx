@@ -48,8 +48,8 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           <span className="font-semibold">Request created.</span>{" "}
           {created === "triaged"
-            ? "It now appears in the backlog with the validated AI triage below."
-            : "AI triage was unavailable, so it was saved without enrichment and is marked as not triaged."}
+            ? "It now appears in the backlog with its AI triage below. You are its first supporter."
+            : "AI triage was unavailable, so it was saved without enrichment and is marked as not triaged. You are its first supporter."}
         </div>
       )}
 
@@ -129,7 +129,8 @@ function ConsolidatedSubmissions({ submissions }: { submissions: ConsolidatedSub
       <ul className="flex flex-col gap-3">
         {submissions.map((submission, index) => (
           <li key={index} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-            <p className="text-sm whitespace-pre-wrap text-neutral-800">{submission.wording}</p>
+            <p className="text-sm font-medium text-neutral-900">{submission.title}</p>
+            <p className="mt-1 text-sm whitespace-pre-wrap text-neutral-700">{submission.description}</p>
             <p className="mt-2 text-xs text-neutral-500">
               <time dateTime={submission.submittedAt.toISOString()}>{formatDate(submission.submittedAt)}</time>
             </p>
@@ -170,7 +171,7 @@ function AiTriageSection({ request }: { request: RequestDetail }) {
         ) : (
           <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 ring-1 ring-violet-600/20 ring-inset">
             <SparkIcon className="size-3.5" />
-            AI-generated
+            AI-generated · format checked
           </span>
         )
       }
@@ -212,10 +213,14 @@ function AiTriageSection({ request }: { request: RequestDetail }) {
               <dd className="text-xs text-neutral-900">{formatDateTime(provenance.triagedAt)}</dd>
             </div>
           </dl>
-          {provenance.isSeedFixture && (
+          {provenance.isSeedFixture ? (
             <p className="mt-3 text-xs text-amber-800">
-              Hand-written demo data loaded by the seed script. It follows the same validated schema as model output
-              but was not produced by a live Anthropic call.
+              Hand-written demo data loaded by the seed script. It passes the same schema checks as model output but
+              was not produced by a live Anthropic call.
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-neutral-500">
+              The app checked the response structure and request references. The recommendation itself is AI judgment.
             </p>
           )}
         </div>

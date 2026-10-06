@@ -30,15 +30,7 @@ export class AnthropicTriageModel implements TriageModel {
 
   constructor(config: AnthropicTriageModelConfig, client?: AnthropicMessagesClient) {
     this.modelId = config.modelId;
-    this.client =
-      client ??
-      new Anthropic({
-        apiKey: config.apiKey,
-        // Only ANTHROPIC_API_KEY is used; never fall back to other ambient credentials.
-        authToken: null,
-        timeout: config.timeoutMs,
-        maxRetries: 1,
-      });
+    this.client = client ?? createAnthropicClient(config);
   }
 
   async generate(request: TriageModelRequest): Promise<unknown> {
@@ -69,12 +61,15 @@ export class AnthropicTriageModel implements TriageModel {
       .map((block) => block.text)
       .join("");
 
-    // A response cut off at the token limit is never trusted, even if what was
-    // produced happens to parse and validate.
-    if (message.stop_reason === "max_tokens") {
-      throw new TriageModelError("incomplete_output", "The model response was cut off at the output token limit.", {
-        partialOutput: text,
-      });
+    // Only a normal, complete stop can succeed. max_tokens,
+    // model_context_window_exceeded or any other reason means the response may
+    // be incomplete: it is never trusted, even if it happens to parse and validate.
+    if (message.stop_reason !== "end_turn") {
+      throw new TriageModelError(
+        "incomplete_output",
+        `The model stopped before completing its response (stop reason: ${message.stop_reason ?? "none"}).`,
+        { partialOutput: text },
+      );
     }
 
     // Unparseable text is returned as-is so the caller treats it as invalid
@@ -85,6 +80,22 @@ export class AnthropicTriageModel implements TriageModel {
       return text;
     }
   }
+}
+
+/**
+ * SDK retries are disabled: an Analyze makes at most two model calls (the
+ * initial one plus the application's single corrective retry), and provider
+ * failures surface through the honest unavailable path instead of being
+ * retried invisibly.
+ */
+export function createAnthropicClient(config: AnthropicTriageModelConfig): Anthropic {
+  return new Anthropic({
+    apiKey: config.apiKey,
+    // Only ANTHROPIC_API_KEY is used; never fall back to other ambient credentials.
+    authToken: null,
+    timeout: config.timeoutMs,
+    maxRetries: 0,
+  });
 }
 
 function toTriageModelError(error: unknown): TriageModelError {

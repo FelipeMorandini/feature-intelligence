@@ -1,7 +1,12 @@
 import { APIConnectionTimeoutError } from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { buildTriagePrompt } from "@/triage/prompt";
-import { AnthropicTriageModel, toAnthropicJsonSchema, type AnthropicMessagesClient } from "./anthropic-triage-model";
+import {
+  AnthropicTriageModel,
+  createAnthropicClient,
+  toAnthropicJsonSchema,
+  type AnthropicMessagesClient,
+} from "./anthropic-triage-model";
 import { TriageModelError } from "./triage-model";
 
 const request = buildTriagePrompt({
@@ -49,13 +54,23 @@ describe("AnthropicTriageModel", () => {
     await expect(modelWith(create).generate(request)).resolves.toBe('{"theme": "exper');
   });
 
-  it("never accepts a max_tokens response, even when it parses", async () => {
-    const truncated = modelWith(vi.fn().mockResolvedValue(message(VALID_JSON, "max_tokens")));
+  it.each(["max_tokens", "model_context_window_exceeded", "pause_turn", "some_future_reason"])(
+    "never accepts a %s response, even when it parses",
+    async (stopReason) => {
+      const incomplete = modelWith(vi.fn().mockResolvedValue(message(VALID_JSON, stopReason)));
 
-    await expect(truncated.generate(request)).rejects.toMatchObject({
-      kind: "incomplete_output",
-      partialOutput: VALID_JSON,
-    });
+      await expect(incomplete.generate(request)).rejects.toMatchObject({
+        kind: "incomplete_output",
+        partialOutput: VALID_JSON,
+      });
+    },
+  );
+
+  it("disables SDK retries so an Analyze makes at most two model calls", () => {
+    const client = createAnthropicClient({ apiKey: "test", modelId: "claude-sonnet-5-5", timeoutMs: 1234 });
+
+    expect(client.maxRetries).toBe(0);
+    expect(client.timeout).toBe(1234);
   });
 
   it("classifies timeouts and refusals as provider failures", async () => {

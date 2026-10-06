@@ -29,6 +29,33 @@ const fieldClasses =
   "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-xs placeholder:text-neutral-400 focus:border-indigo-500 focus:outline-2 focus:outline-indigo-500/20 read-only:bg-neutral-50 read-only:text-neutral-600";
 
 const NETWORK_ERROR = "Couldn't reach the server. Please try again.";
+const SERVER_ERROR = "Something went wrong on the server. Nothing was saved.";
+
+type PostResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+/**
+ * Posts JSON and tells a network failure apart from a server failure. 4xx
+ * responses carry a typed status (e.g. invalid_input, stale_analysis) and are
+ * returned as data; 5xx or non-JSON responses are server failures.
+ */
+async function postJson<T>(url: string, body: unknown): Promise<PostResult<T>> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  if (response.status >= 500) return { ok: false, error: SERVER_ERROR };
+  try {
+    return { ok: true, data: (await response.json()) as T };
+  } catch {
+    return { ok: false, error: SERVER_ERROR };
+  }
+}
 
 /**
  * Analyze → Decide. Analyze stores a triage run and returns a recommendation;
@@ -66,20 +93,13 @@ export function NewRequestForm({ titleLimits, descriptionLimits }: NewRequestFor
   async function analyze() {
     if (!canAnalyze) return;
     setPhase({ name: "analyzing" });
-    try {
-      const response = await fetch("/api/triage", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, description }),
-      });
-      const result: AnalyzeResult = await response.json();
-      if (result.status === "invalid_input") {
-        setPhase({ name: "editing", fieldErrors: result.fieldErrors });
-      } else {
-        setPhase({ name: "review", result, pending: null });
-      }
-    } catch {
-      setPhase({ name: "editing", error: NETWORK_ERROR });
+    const response = await postJson<AnalyzeResult>("/api/triage", { title, description });
+    if (!response.ok) {
+      setPhase({ name: "editing", error: response.error });
+    } else if (response.data.status === "invalid_input") {
+      setPhase({ name: "editing", fieldErrors: response.data.fieldErrors });
+    } else {
+      setPhase({ name: "review", result: response.data, pending: null });
     }
   }
 
@@ -91,17 +111,12 @@ export function NewRequestForm({ titleLimits, descriptionLimits }: NewRequestFor
     setPhase({ name: "review", result, pending });
     const fail = (error: ReactNode) => setPhase({ name: "review", result, pending: null, error });
 
-    let decision: DecisionResult;
-    try {
-      const response = await fetch(`/api/triage/${encodeURIComponent(result.triageRunId)}/decision`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, description, ...action }),
-      });
-      decision = await response.json();
-    } catch {
-      return fail(NETWORK_ERROR);
-    }
+    const response = await postJson<DecisionResult>(
+      `/api/triage/${encodeURIComponent(result.triageRunId)}/decision`,
+      { title, description, ...action },
+    );
+    if (!response.ok) return fail(response.error);
+    const decision = response.data;
 
     switch (decision.status) {
       case "created":
@@ -223,7 +238,7 @@ export function NewRequestForm({ titleLimits, descriptionLimits }: NewRequestFor
           <div className="flex flex-col-reverse gap-3 border-t border-neutral-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-neutral-500" aria-live="polite">
               {phase.name === "analyzing"
-                ? "Analyzing your request against the backlog. This usually takes 10–30 seconds."
+                ? "Analyzing your request against the backlog. AI triage can take a few seconds."
                 : phase.name === "review"
                   ? "Editing the text will discard this analysis."
                   : "Nothing is saved when you analyze."}

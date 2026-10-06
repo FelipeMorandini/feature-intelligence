@@ -1,7 +1,7 @@
-import { and, count, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "@/db/client";
-import { featureRequests, supports, triageRuns } from "@/db/schema";
+import { featureRequests, supports, triageDecisions, triageRuns } from "@/db/schema";
 import { SEED_FIXTURE_MODEL } from "@/db/seed-data";
 import { computePriority, type PriorityAssessment } from "@/domain/priority";
 import { getTheme, THEME_IDS, type Theme } from "@/domain/themes";
@@ -192,22 +192,29 @@ export function getBacklogItemsByIds(
 }
 
 export interface ConsolidatedSubmission {
-  wording: string;
+  title: string;
+  description: string;
   submittedAt: Date;
 }
 
 /**
- * Original wording kept when someone chose to support this request instead of
- * creating a probable duplicate.
+ * Submissions whose authors chose to support this request instead of creating
+ * a probable duplicate. The source of truth is the `supported_existing`
+ * decision and the exact text its triage run analyzed — so every consolidated
+ * submission is kept, even when that browser already supported the request.
  */
 export function listConsolidatedSubmissions(db: AppDatabase, requestId: string): ConsolidatedSubmission[] {
   return db
-    .select({ wording: supports.comment, submittedAt: supports.createdAt })
-    .from(supports)
-    .where(and(eq(supports.requestId, requestId), isNotNull(supports.comment)))
-    .orderBy(desc(supports.createdAt))
-    .all()
-    .map((row) => ({ wording: row.wording ?? "", submittedAt: row.submittedAt }));
+    .select({
+      title: triageRuns.inputTitle,
+      description: triageRuns.inputDescription,
+      submittedAt: triageDecisions.createdAt,
+    })
+    .from(triageDecisions)
+    .innerJoin(triageRuns, eq(triageRuns.id, triageDecisions.triageRunId))
+    .where(and(eq(triageDecisions.resultingRequestId, requestId), eq(triageDecisions.decision, "supported_existing")))
+    .orderBy(desc(triageDecisions.createdAt))
+    .all();
 }
 
 export function countRequests(db: AppDatabase): number {

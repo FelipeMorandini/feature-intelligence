@@ -7,6 +7,8 @@ import { parseServerEnv } from "@/config/env";
 import { createMigratedMemoryDatabase, type AppDatabase } from "@/db/client";
 import { featureRequests, supports, triageDecisions, triageRuns } from "@/db/schema";
 import { seedDatabase } from "@/db/seed";
+import { listConsolidatedSubmissions } from "@/requests/queries";
+import { countSupports, supportRequest } from "@/requests/support";
 import { FakeTriageModel, type FakeTriageResponse } from "@/testing/fake-triage-model";
 import { AllOpenRequestsRetriever } from "./candidate-retriever";
 import type { TriageModelOutput } from "./contract";
@@ -79,7 +81,11 @@ describe("triage service", () => {
 
     const analyzed = expectAnalyzed(result);
     expect(analyzed.probableDuplicate).toBeNull();
-    expect(analyzed.analysis.priority.components.find((c) => c.dimension === "observedDemand")?.points).toBe(0);
+    // The review reflects the submitter as the first supporter.
+    expect(analyzed.analysis.priority.components.find((c) => c.dimension === "observedDemand")).toMatchObject({
+      input: 1,
+      points: expect.any(Number),
+    });
     expect(requestCount()).toBe(before);
 
     const run = runRow(analyzed.triageRunId);
@@ -111,8 +117,16 @@ describe("triage service", () => {
       problemStatement: output().problemStatement,
     });
     expect(created.enrichment?.rubric).toEqual(output().rubric);
-    // Repeating the decision (e.g. a double click) is idempotent.
+    // The submitter is the first supporter.
+    expect(countSupports(db, decision.requestId)).toBe(1);
+    expect(db.select().from(supports).where(eq(supports.requestId, decision.requestId)).get()).toMatchObject({
+      voterId: VOTER,
+      source: "direct",
+    });
+    // Repeating the decision (e.g. a double click) is idempotent and adds no support.
     expect(decideTriage(db, triageRunId, { action: "create", ...SUBMISSION }, VOTER)).toEqual(decision);
+    expect(decideTriage(db, triageRunId, { action: "create", ...SUBMISSION }, "other-voter")).toEqual(decision);
+    expect(countSupports(db, decision.requestId)).toBe(1);
   });
 
   it("ignores enrichment forged by the client", async () => {
@@ -276,6 +290,7 @@ describe("triage service", () => {
     const decision = decideTriage(db, result.triageRunId, { action: "create", ...SUBMISSION }, VOTER);
     if (decision.status !== "created") throw new Error(decision.status);
     expect(decision.triaged).toBe(false);
+    expect(countSupports(db, decision.requestId)).toBe(1);
     expect(db.select().from(featureRequests).where(eq(featureRequests.id, decision.requestId)).get()).toMatchObject({
       title: SUBMISSION.title,
       triageStatus: "failed",
@@ -297,6 +312,56 @@ describe("triage service", () => {
       status: "provider_error",
       error: "The AI provider did not respond in time.",
     });
+  });
+
+  describe("when the corrective retry fails after a usable first result", () => {
+    // Valid first result: a real duplicate plus an invented id, which is dropped.
+    const usableFirst = output({
+      matches: [
+        { ...chatDuplicate.matches[0], requestId: "seed-invented-by-model" },
+        chatDuplicate.matches[0],
+      ],
+    });
+
+    it.each<[string, FakeTriageResponse]>([
+      ["malformed output", { output: { theme: "blockchain" } }],
+      ["a provider failure", { error: new TriageModelError("provider_error", "Anthropic API error (529): overloaded") }],
+    ])("keeps the sanitized first result after %s", async (_label, secondAttempt) => {
+      const { result, model } = await analyze([{ output: usableFirst }, secondAttempt]);
+
+      const analyzed = expectAnalyzed(result);
+      expect(model.requests).toHaveLength(2);
+      expect(analyzed.probableDuplicate?.requestId).toBe("seed-chat-assignment-alerts");
+      expect(analyzed.otherMatches.map((m) => m.requestId)).not.toContain("seed-invented-by-model");
+
+      const run = runRow(analyzed.triageRunId);
+      expect(run.status).toBe("succeeded");
+      expect(run.rawOutput).toMatchObject({ usedAttempt: 1, attempts: [{ attempt: 1 }, { attempt: 2 }] });
+
+      // The real duplicate still requires a human decision.
+      expect(decideTriage(db, analyzed.triageRunId, { action: "create", ...SUBMISSION }, VOTER)).toEqual({
+        status: "decision_required",
+        suggestedRequestId: "seed-chat-assignment-alerts",
+      });
+    });
+  });
+
+  it("keeps a consolidated submission even when the voter already supported the request", async () => {
+    const target = "seed-chat-assignment-alerts";
+    expect(supportRequest(db, target, VOTER)).toEqual({ status: "supported", supportCount: 15 });
+
+    const { result } = await analyze([{ output: chatDuplicate }]);
+    const { triageRunId } = expectAnalyzed(result);
+    const decision = decideTriage(db, triageRunId, { action: "support_existing", requestId: target, ...SUBMISSION }, VOTER);
+
+    expect(decision).toEqual({ status: "supported", requestId: target, supportCount: 15, alreadySupported: true });
+    expect(db.select().from(triageDecisions).where(eq(triageDecisions.triageRunId, triageRunId)).get()).toMatchObject({
+      decision: "supported_existing",
+      resultingRequestId: target,
+    });
+    expect(listConsolidatedSubmissions(db, target)).toEqual([
+      expect.objectContaining({ title: SUBMISSION.title, description: SUBMISSION.description }),
+    ]);
   });
 
   describe("with the Anthropic provider (mocked SDK client)", () => {

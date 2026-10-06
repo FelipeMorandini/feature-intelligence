@@ -160,7 +160,8 @@ export default function HowItWorksPage() {
 
       <Section title="Observed demand" description="Measured from supports, never estimated by the model.">
         <p>
-          Every support counts, but each additional one counts a little less, and demand reaches its full{" "}
+          The person who submits a request counts as its first supporter. Every support counts, but each additional
+          one counts a little less, and demand reaches its full{" "}
           {demandWeight}% weight at {DEMAND_SATURATION_SUPPORTS} supports. That way early signal matters, and a pile-on
           cannot drown out the other dimensions. Formally: min(1, log₂(1 + supports) / log₂(
           {1 + DEMAND_SATURATION_SUPPORTS})).

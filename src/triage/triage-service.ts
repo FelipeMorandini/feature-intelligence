@@ -33,6 +33,9 @@ import { buildTriagePrompt, TRIAGE_PROMPT_VERSION } from "./prompt";
 
 /** One initial attempt plus at most one corrective retry. */
 export const MAX_MODEL_ATTEMPTS = 2;
+
+/** The submitter is the first supporter of the request they create. */
+export const SUBMITTER_SUPPORTS = 1;
 const MAX_FEEDBACK_LENGTH = 1_500;
 
 export interface TriageDependencies {
@@ -61,7 +64,7 @@ export interface TriageAnalysisView {
   theme: Theme;
   themeRationale: string;
   rubric: TriageRubric;
-  /** Computed by application code for a new request with no supports yet. */
+  /** Computed by application code for a new request whose only supporter is its submitter. */
   priority: PriorityAssessment;
 }
 
@@ -87,10 +90,11 @@ interface AttemptRecord {
   output: unknown;
   validationErrors?: string;
   droppedMatchIds?: string[];
+  providerError?: string;
 }
 
 type ModelOutcome =
-  | { status: "succeeded"; output: TriageModelOutput; attempts: AttemptRecord[] }
+  | { status: "succeeded"; output: TriageModelOutput; usedAttempt: number; attempts: AttemptRecord[] }
   | { status: "invalid_output"; error: string; attempts: AttemptRecord[] }
   | { status: "provider_error"; reason: "timeout" | "provider_error"; error: string; attempts: AttemptRecord[] };
 
@@ -102,6 +106,10 @@ async function runModel(
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
   const attempts: AttemptRecord[] = [];
   let validationFeedback: string | undefined;
+  // A schema-valid result whose unknown match ids were already removed. If the
+  // corrective retry fails for any reason, this result is used rather than
+  // discarded — so a real duplicate it found still goes to human review.
+  let usable: { output: TriageModelOutput; attempt: number } | null = null;
 
   for (let attempt = 1; attempt <= MAX_MODEL_ATTEMPTS; attempt++) {
     let raw: unknown;
@@ -109,20 +117,23 @@ async function runModel(
       raw = await model.generate(buildTriagePrompt({ input, candidates, validationFeedback }));
     } catch (error) {
       if (error instanceof TriageModelError && error.kind === "incomplete_output") {
-        // Truncated output counts as an invalid attempt and uses the single
+        // Incomplete output counts as an invalid attempt and uses the single
         // corrective retry; it is never accepted as a successful analysis.
         attempts.push({ attempt, output: error.partialOutput ?? null, validationErrors: error.message });
         validationFeedback =
           "- the response was cut off before it was complete. Keep every rationale brief and return the full response.";
         continue;
       }
-      // Provider failures are not retried here: the SDK already retries
-      // transient errors, and a second call would double the user's wait.
+      // Provider failures are not retried: they surface through the honest
+      // unavailable path (the SDK's own retries are disabled too).
       const known = error instanceof TriageModelError;
+      const message = known ? error.message : "Unexpected error while calling the AI provider.";
+      attempts.push({ attempt, output: null, providerError: message });
+      if (usable) return { status: "succeeded", output: usable.output, usedAttempt: usable.attempt, attempts };
       return {
         status: "provider_error",
         reason: known && error.kind === "timeout" ? "timeout" : "provider_error",
-        error: known ? error.message : "Unexpected error while calling the AI provider.",
+        error: message,
         attempts,
       };
     }
@@ -132,13 +143,14 @@ async function runModel(
 
     if (result.ok && (result.droppedMatchIds.length === 0 || isLastAttempt)) {
       attempts.push({ attempt, output: raw, droppedMatchIds: result.droppedMatchIds });
-      return { status: "succeeded", output: result.output, attempts };
+      return { status: "succeeded", output: result.output, usedAttempt: attempt, attempts };
     }
 
     if (result.ok) {
       // Unknown ids can never be acted upon (they are dropped), but a typo'd id
       // could hide a real duplicate, so the one retry is spent correcting it.
       attempts.push({ attempt, output: raw, droppedMatchIds: result.droppedMatchIds });
+      usable = { output: result.output, attempt };
       validationFeedback = `- matches referenced request ids that are not in <existing_requests>: ${result.droppedMatchIds.join(", ")}. Use only ids listed there.`;
     } else {
       attempts.push({ attempt, output: raw, validationErrors: result.message });
@@ -146,6 +158,7 @@ async function runModel(
     }
   }
 
+  if (usable) return { status: "succeeded", output: usable.output, usedAttempt: usable.attempt, attempts };
   return {
     status: "invalid_output",
     error: `Model output failed validation on all ${MAX_MODEL_ATTEMPTS} attempts.`,
@@ -213,7 +226,10 @@ export async function analyzeSubmission(
       ...run,
       model: deps.model.model.modelId,
       status: statusByOutcome[outcome.status],
-      rawOutput: outcome.attempts.length > 0 ? { attempts: outcome.attempts } : null,
+      rawOutput: {
+        attempts: outcome.attempts,
+        ...(outcome.status === "succeeded" ? { usedAttempt: outcome.usedAttempt } : {}),
+      },
       validatedOutput: outcome.status === "succeeded" ? outcome.output : null,
       error: outcome.status === "succeeded" ? null : outcome.error,
       latencyMs,
@@ -246,7 +262,7 @@ function buildReview(db: AppDatabase, output: TriageModelOutput, voterId: string
         strategicAlignment: rubric.strategicAlignment.score,
         workaroundGap: rubric.workaroundGap.score,
       },
-      0,
+      SUBMITTER_SUPPORTS,
     ),
   };
 
@@ -346,7 +362,7 @@ export function decideTriage(
   if (hashTriageInput(body.data) !== run.inputHash) return { status: "stale_analysis" };
 
   return body.data.action === "create"
-    ? createFromRun(db, run, body.data.createAnyway)
+    ? createFromRun(db, run, body.data.createAnyway, voterId)
     : supportExistingFromRun(db, run, body.data.requestId, voterId);
 }
 
@@ -361,7 +377,7 @@ function previousDecision(db: DbExecutor, runId: string) {
   return { created, decision };
 }
 
-function createFromRun(db: AppDatabase, run: TriageRunRow, createAnyway: boolean): DecisionResult {
+function createFromRun(db: AppDatabase, run: TriageRunRow, createAnyway: boolean, voterId: string): DecisionResult {
   const output = storedOutput(run);
 
   return db.transaction((tx) => {
@@ -371,11 +387,15 @@ function createFromRun(db: AppDatabase, run: TriageRunRow, createAnyway: boolean
 
     const requestId = randomUUID();
     const base = { id: requestId, title: run.inputTitle, description: run.inputDescription, triageRunId: run.id };
+    // Submitting a new request expresses demand: the submitter is its first
+    // supporter. Replays never reach this point (the request already exists).
+    const supportFromSubmitter = () => recordSupport(tx, { requestId, voterId, source: "direct" });
 
     if (!output) {
       // Triage was unavailable or failed: create the request untriaged, with
       // no enrichment invented on the model's behalf.
       tx.insert(featureRequests).values({ ...base, triageStatus: "failed" }).run();
+      supportFromSubmitter();
       return { status: "created", requestId, triaged: false };
     }
 
@@ -394,6 +414,7 @@ function createFromRun(db: AppDatabase, run: TriageRunRow, createAnyway: boolean
         enrichment,
       })
       .run();
+    supportFromSubmitter();
 
     if (duplicate) {
       tx.insert(triageDecisions)
