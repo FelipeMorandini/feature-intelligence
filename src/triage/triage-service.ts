@@ -73,6 +73,8 @@ export type AnalyzeResult =
   | {
       status: "analyzed";
       triageRunId: string;
+      /** What produced this recommendation, shown to the person reviewing it. */
+      provenance: { model: string; promptVersion: string };
       analysis: TriageAnalysisView;
       /** Best high/medium-confidence duplicate: creating a new request needs a human decision. */
       probableDuplicate: TriageMatchView | null;
@@ -246,7 +248,12 @@ export async function analyzeSubmission(
     };
   }
 
-  return { status: "analyzed", triageRunId: run.id, ...buildReview(deps.db, outcome.output, voterId) };
+  return {
+    status: "analyzed",
+    triageRunId: run.id,
+    provenance: { model: deps.model.model.modelId, promptVersion: TRIAGE_PROMPT_VERSION },
+    ...buildReview(deps.db, outcome.output, voterId),
+  };
 }
 
 function buildReview(db: AppDatabase, output: TriageModelOutput, voterId: string | null) {

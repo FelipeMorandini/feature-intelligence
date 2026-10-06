@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Submit a request" };
 
 const STEPS = [
   "AI extracts the underlying problem and suggests a theme.",
-  "It checks existing requests for the same need and explains any probable match.",
+  "It checks existing requests for the same need and explains any probable duplicate.",
   "You decide: support the existing request, or create yours anyway.",
 ];
 

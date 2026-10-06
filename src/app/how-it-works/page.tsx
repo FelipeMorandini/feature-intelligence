@@ -20,23 +20,24 @@ const RESPONSIBILITIES = [
     does: [
       "Extracts the underlying customer problem",
       "Classifies the request into one theme",
-      "Flags probable duplicates and explains the shared need and differences",
-      "Scores severity, strategic alignment and workaround gap from 1 to 5, with a rationale for each",
+      "Proposes probable duplicates and related requests, explaining the shared need and what differs",
+      "Scores severity, strategic alignment and workaround gap from 1 to 5, with a rationale for each, and names the strategy goals a request advances",
     ],
   },
   {
     who: "Application code",
     does: [
-      "Validates every model response against a strict schema before using it",
-      "Rejects references to requests the model was never shown",
+      "Checks every model response against a strict schema and consistency rules before using it",
+      "Removes references to requests the model was never shown",
+      "Retries once with feedback if a response is malformed or incomplete, and never accepts a cut-off response",
       "Computes observed demand from real supports",
-      "Calculates the final score and band, and stores the result",
+      "Calculates the priority signal and band, and stores the result with the model and prompt version",
     ],
   },
   {
     who: "People",
     does: [
-      "Support the requests that matter to them",
+      "Support the requests that matter to them (submitting a new request counts as its first support)",
       "Decide whether a probable duplicate is really the same request",
       "Make the actual product and roadmap decisions",
     ],
@@ -52,7 +53,7 @@ export default function HowItWorksPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">How it works</h1>
         <p className="mt-2 text-neutral-600">
           Feature Intelligence uses AI in a deliberately bounded way. The model interprets requests and makes
-          recommendations; application code validates, scores and stores the results; people make every
+          recommendations; application code checks, scores and stores the results; people make every
           consequential decision. Nothing here is a black box: the taxonomy, goals and formula below are the exact
           values the application uses.
         </p>
@@ -73,11 +74,33 @@ export default function HowItWorksPage() {
         </div>
       </Section>
 
-      <Section title="Duplicates are never merged automatically">
+      <Section title="Probable duplicates are never merged automatically">
         <p>
-          When a new request looks like an existing one, you will see the proposed match, how confident the triage is,
-          and why it thinks the two describe the same need. You then choose: support the existing request (your wording
-          is kept with it), or create your request anyway. The AI suggests; it does not consolidate.
+          Each match the model proposes carries its confidence: high, medium or low. A high- or medium-confidence
+          duplicate is a <strong className="font-medium text-neutral-900">probable duplicate</strong>. Before anything
+          is created you see the match, the need the two requests share and what differs, and you choose: support the
+          existing request (your wording is kept with it), or create your request anyway.
+        </p>
+        <p>
+          Related requests and low-confidence matches are shown for context only and never block creating a request.
+          The AI suggests; it does not consolidate.
+        </p>
+      </Section>
+
+      <Section title="What “AI-generated · format checked” means">
+        <p>
+          The application checked the response structure, its values and the requests it references. The
+          recommendation itself is AI judgment and can be wrong, which is why every score is shown with its rationale.
+          Each triaged request records the model and prompt version that produced it; demo data loaded by the seed
+          script is labelled <strong className="font-medium text-neutral-900">Seed fixture</strong> instead.
+        </p>
+      </Section>
+
+      <Section title="When AI triage is unavailable">
+        <p>
+          If no API key is configured, the provider fails or times out, or a response fails the checks twice, nothing
+          is filled in on the model&apos;s behalf. You can still submit: the request is saved exactly as written,
+          marked <strong className="font-medium text-neutral-900">Not triaged</strong> and shown as Unscored.
         </p>
       </Section>
 

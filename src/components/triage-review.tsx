@@ -26,7 +26,7 @@ const UNAVAILABLE_COPY: Record<TriageUnavailableReason, string> = {
   invalid_output: "The AI response failed validation twice, so it was discarded rather than trusted.",
 };
 
-const CONFIDENCE_LABEL = { high: "High confidence", medium: "Medium confidence", low: "Low confidence" } as const;
+const CONFIDENCE_LABEL = { high: "high", medium: "medium", low: "low" } as const;
 
 /** The human review step: shows the format-checked recommendation and offers the decisions. */
 export function TriageReview({ result, pending, error, onCreate, onSupport }: TriageReviewProps) {
@@ -51,7 +51,7 @@ export function TriageReview({ result, pending, error, onCreate, onSupport }: Tr
     );
   }
 
-  const { analysis, probableDuplicate, otherMatches } = result;
+  const { analysis, probableDuplicate, otherMatches, provenance } = result;
 
   return (
     <div className="flex flex-col gap-6">
@@ -74,6 +74,9 @@ export function TriageReview({ result, pending, error, onCreate, onSupport }: Tr
         </div>
         <p className="mt-2 text-xs text-neutral-500">
           The app checked the response structure and request references. The recommendation itself is AI judgment.
+        </p>
+        <p className="mt-1 font-mono text-[11px] text-neutral-400">
+          {provenance.model} · prompt {provenance.promptVersion}
         </p>
 
         <dl className="mt-5 flex flex-col gap-5">
@@ -142,7 +145,7 @@ function DuplicateDecision({
         This looks like an existing request
       </h2>
       <p className="mt-1 text-sm text-neutral-600">
-        Nothing has been created or merged. Review the match and choose what happens next.
+        Nothing has been created or merged. The AI suggests a match; you decide what happens next.
       </p>
 
       <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -156,7 +159,7 @@ function DuplicateDecision({
             <span className="sr-only"> (opens in a new tab)</span>
           </Link>
           <span className="w-fit shrink-0 rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white">
-            {CONFIDENCE_LABEL[match.confidence]} duplicate
+            AI confidence: {CONFIDENCE_LABEL[match.confidence]}
           </span>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-neutral-500">
@@ -198,7 +201,7 @@ function DuplicateDecision({
         </ActionButton>
       </div>
       <p className="mt-3 text-xs text-neutral-500 sm:text-right">
-        Recommended: supporting adds your vote to the existing request and keeps your wording with it.
+        Recommended: supporting makes you a supporter of the existing request and keeps your wording with it.
       </p>
     </section>
   );
@@ -208,16 +211,17 @@ function OtherMatches({ matches }: { matches: TriageMatchView[] }) {
   const label = (match: TriageMatchView) =>
     match.relationship === "related"
       ? "Related"
-      : match.confidence === "low"
-        ? "Possible duplicate · low confidence"
-        : `Also similar · ${CONFIDENCE_LABEL[match.confidence].toLowerCase()}`;
+      : `Possible duplicate · AI confidence: ${CONFIDENCE_LABEL[match.confidence]}`;
 
   return (
     <section aria-labelledby="other-matches" className="rounded-xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-6">
       <h2 id="other-matches" className="text-base font-semibold text-neutral-900">
-        Related requests
+        Other matches
       </h2>
-      <p className="mt-1 text-sm text-neutral-600">For context only — these do not block creating your request.</p>
+      <p className="mt-1 text-sm text-neutral-600">
+        Related requests and weaker possible duplicates, shown for context only. They do not block creating your
+        request.
+      </p>
       <ul className="mt-4 flex flex-col divide-y divide-neutral-100">
         {matches.map((match) => (
           <li key={match.requestId} className="py-3 first:pt-0 last:pb-0">
